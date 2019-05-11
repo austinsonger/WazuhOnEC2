@@ -7,7 +7,7 @@
     "KeyName": {
       "Description" : "Enter the KeyPair Name here",
       "Type": "AWS::EC2::KeyPair::KeyName",
-      "Default": "EC2 Wazuh",
+      "Default": "MyKey",
       "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
     },
 
@@ -35,7 +35,10 @@
       "Type" : "AWS::EC2::Instance",
       "Properties" : {
         "InstanceType" : { "Ref" : "InstanceType" },
-        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "Tags" : [
+            {"Key" : "Name", "Value" : "Ubuntu18Wazuh"}],
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" },
+                            { "Ref" : "KibanaUISecurityGroup" }],
         "KeyName" : { "Ref" : "KeyName" },
         "ImageId" : "ami-0a313d6098716f372",
         "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
@@ -49,7 +52,37 @@
                         "sudo apt-get install wazuh-manager\n",
                         "sudo curl -sL https://deb.nodesource.com/setup_8.x | bash -\n",
                         "sudo apt-get install --assume-yes nodejs\n",
-                        "sudo apt-get install --assume-yes wazuh-api\n"
+                        "sudo apt-get install --assume-yes wazuh-api\n",
+                        "sudo apt-get update\n",
+                        "sudo apt-get install --assume-yes openjdk-8-jre\n",
+                        "sudo apt-get install --assume-yes curl apt-transport-https\n",
+                        "sudo curl -s https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo apt-key add -\n",
+                        "echo \"deb https://artifacts.elastic.co/packages/6.x/apt stable main\" | sudo tee /etc/apt/sources.list.d/elastic-6.x.list\n",
+                        "sudo apt-get update\n",
+                        "sudo apt-get install --assume-yes elasticsearch=6.7.1\n",
+                        "sudo systemctl daemon-reload\n",
+                        "sudo systemctl enable elasticsearch.service\n",
+                        "sudo systemctl start elasticsearch.service\n",
+                        "sudo curl https://raw.githubusercontent.com/wazuh/wazuh/3.9/extensions/elasticsearch/wazuh-elastic6-template-alerts.json | sudo curl -X PUT \"http://localhost:9200/_template/wazuh\" -H 'Content-Type: application/json' -d @-\n",
+                        "sudo apt-get install --assume-yes logstash=1:6.7.1-1\n",
+                        "sudo curl -so /etc/logstash/conf.d/01-wazuh.conf https://raw.githubusercontent.com/wazuh/wazuh/3.9/extensions/logstash/01-wazuh-local.conf\n",
+                        "sudo usermod -a -G ossec logstash\n",
+                        "sudo systemctl daemon-reload\n",
+                        "sudo systemctl enable logstash.service\n",
+                        "sudo systemctl start logstash.service\n",
+                        "sudo apt-get install --assume-yes kibana=6.7.1\n",
+                        "echo 'server.host: \"0.0.0.0\"' | sudo tee -a /etc/kibana/kibana.yml\n",
+                        "echo 'server.port: \"5601\"' | sudo tee -a /etc/kibana/kibana.yml\n",
+                        "sudo chown -R kibana:root /usr/share/kibana/optimize/bundles/\n",
+                        "sudo systemctl restart kibana\n",
+                        "sudo -u kibana NODE_OPTIONS=\"--max-old-space-size=3072\" /usr/share/kibana/bin/kibana-plugin install https://packages.wazuh.com/wazuhapp/wazuhapp-3.9.0_6.7.1.zip\n",
+                        "sudo systemctl daemon-reload\n"
+                        "sudo systemctl enable kibana.service\n",
+                        "sudo systemctl start kibana.service\n",
+                        "sudo sed -i \"s/^deb/#deb/\" /etc/apt/sources.list.d/elastic-6.x.list\n",
+                        "sudo apt-get update\n",
+                        "sudo iptables -I INPUT -p tcp --dport 5601 --syn -j ACCEPT\n",
+                        "sudo iptables -I INPUT -p tcp --dport 9200 --syn -j ACCEPT\n"
                         ]]}}
 
       }
@@ -63,6 +96,19 @@
           "IpProtocol" : "tcp",
           "FromPort" : "22",
           "ToPort" : "22",
+          "CidrIp" : "0.0.0.0/0"
+        } ]
+      }
+    },
+
+    "KibanaUISecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable Kibana UI access via port 5601",
+        "SecurityGroupIngress" : [ {
+          "IpProtocol" : "tcp",
+          "FromPort" : "5601",
+          "ToPort" : "5601",
           "CidrIp" : { "Ref" : "SSHLocation"}
         } ]
       }
