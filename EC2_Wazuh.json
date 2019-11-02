@@ -7,7 +7,7 @@
     "KeyName": {
       "Description" : "Enter the KeyPair Name here",
       "Type": "AWS::EC2::KeyPair::KeyName",
-      "Default": "MyKey",
+      "Default": "plesk.pem",
       "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
     },
 
